@@ -3,9 +3,14 @@ venv/
 env/
 .env
 
+.vscode/
+
 # Archivos compilados de Python
 __pycache__/
 *.pyc
 
 # Archivos de datos
 Data/
+
+# Carpetas de resultados
+Resultados*/
