@@ -1,0 +1,1 @@
+Para poder ejecutar el código será necesario introducir el contenido del Dataset "UEyes_dataset" en una carpeta llamada "Data", al ejecutar los códigos se crearán carpetas dentro de la carpeta "Resultados", todo identificado según la fecha y hora de la ejecución.
