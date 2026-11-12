@@ -1,0 +1,4 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_attention_entropy,feature_fixation_duration_mean,0.0352606651429669,0.006041660703893281
+target_attention_entropy,category,0.02335064750188031,-0.0020341786479111724
+target_attention_entropy,feature_fixation_duration_total,0.014590570469328665,-0.0009009062674012941

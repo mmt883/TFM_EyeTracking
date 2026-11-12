@@ -1,0 +1,12 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_scanpath_length,early_step_distance_mean,0.3106488482952117,-0.2401643385887146
+target_scanpath_length,early_scanpath_length,0.21113561868667602,-0.12172984910011289
+target_scanpath_length,early_x_std,0.09827220726013186,-0.025667989015579273
+target_scanpath_length,early_fixation_count,0.09616141664981845,0.09616141664981845
+target_scanpath_length,early_y_mean,0.06316950559616093,-0.03283593559265139
+target_scanpath_length,early_x_mean,0.05033231341838832,-0.05033231341838832
+target_scanpath_length,early_duration_mean,0.03611658549308779,-0.0030147187709809063
+target_scanpath_length,early_duration_std,0.02817396342754359,-0.0045544961690903605
+target_scanpath_length,early_duration_total,0.027200663208961508,0.013432923436164845
+target_scanpath_length,early_spatial_dispersion,0.023258135914802545,0.012571473956108048
+target_scanpath_length,early_y_std,0.02129371511936188,0.015301047205925011

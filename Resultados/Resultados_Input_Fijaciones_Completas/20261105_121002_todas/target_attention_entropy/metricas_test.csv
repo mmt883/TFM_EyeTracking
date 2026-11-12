@@ -1,0 +1,2 @@
+﻿target,train_rows,test_rows,feature_count,rmse,mae,r2,root_mean_squared_error,mean_squared_error,mean_absolute_error,pearsonr,median_absolute_error,accuracy,f1_weighted,classification_class_count,classification_tertile_cutoffs
+target_attention_entropy,18340,749,5,0.06593640252120467,0.05022830440139314,0.5356120902274992,-0.06593640252120467,-0.004347609177438326,-0.05022830440139314,0.745024425330951,-0.03993252711454098,0.562082777036048,0.5690597041125736,3,0.500885809482|0.57190224283

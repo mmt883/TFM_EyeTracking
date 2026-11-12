@@ -1,0 +1,2 @@
+﻿target,model,train_rows,test_rows,feature_count,rmse,mae,r2,accuracy,f1_weighted,classification_class_count,classification_tertile_cutoffs
+target_fixation_duration_mean,MultiModalPredictor,18340,749,33,0.04951232167563669,0.03653190236561464,0.03285448920944645,0.3658210947930574,0.293367978182264,3,0.294433125|0.331158421053

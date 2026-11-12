@@ -1,0 +1,6 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_grid_coverage,feature_fixation_duration_mean,0.02793535733036697,0.004076115114614371
+target_grid_coverage,category,0.017396975947543976,-0.008531084803864355
+target_grid_coverage,feature_fixation_duration_total,0.012237265655770897,0.006109978510066871
+target_grid_coverage,feature_fixation_duration_std,0.0012942752670496687,-0.0001740295756608251
+target_grid_coverage,feature_observation_duration_seconds,0.0011230255626142036,0.0010651066489517677

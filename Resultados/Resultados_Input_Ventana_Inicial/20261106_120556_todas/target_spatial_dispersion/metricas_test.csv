@@ -1,0 +1,2 @@
+﻿target,train_rows,test_rows,feature_count,rmse,mae,r2,root_mean_squared_error,mean_squared_error,mean_absolute_error,pearsonr,median_absolute_error,accuracy,f1_weighted,classification_class_count,classification_tertile_cutoffs
+target_spatial_dispersion,18207,740,11,0.05179231685165809,0.04185936964993624,0.4133424413953515,-0.05179231685165809,-0.0026824440848625467,-0.04185936964993624,0.6569095475387206,-0.036524909673651906,0.5364864864864864,0.544674670429681,3,0.236794877009|0.294249311508
