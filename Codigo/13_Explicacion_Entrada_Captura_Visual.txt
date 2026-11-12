@@ -1,0 +1,201 @@
+EXPLICACION DEL SCRIPT 13
+========================
+Archivo explicado: 13_Entrada_Captura_Visual.py
+
+1. ¿PARA QUE SIRVE?
+------------------
+Este script intenta predecir medidas de mirada utilizando la captura de la
+interfaz y caracteristicas visuales calculadas a partir de ella. No pasa al
+modelo coordenadas, fijaciones ni metadatos de los participantes.
+
+Los targets de mirada se obtienen mediante Funciones_Entradas.py y describen la
+sesion completa, por lo que el experimento estudia que relacion tiene la
+interfaz con las medidas observadas, no una prediccion de mirada en tiempo real.
+
+2. DATOS Y CONFIGURACION
+------------------------
+Necesita:
+- image_types.csv para seleccionar imagenes y conservar su particion oficial
+  Train/Test.
+- Los logs de eyetracking para obtener los targets de cada participante.
+- Las capturas correspondientes dentro de Data/UEyes_dataset/images/.
+
+Los directorios se definen en Funciones_Comunes.py. Los parametros del script
+son:
+- CATEGORY_FILTER: None procesa todas las categorias, o se puede elegir
+  desktop, mobile, poster o web.
+- Los targets incluyen las sesiones de todos los participantes reconocibles
+  por el nombre del log; no hay filtro por usuario.
+- VISUAL_ANALYSIS_MAX_SIZE: limita el tamano maximo de analisis a 256 pixeles.
+  La imagen original no se modifica en disco.
+- TIME_LIMIT_SECONDS: limite de AutoGluon por target.
+- RUN_TRAINING: True ajusta los modelos; False exporta solo el dataset.
+
+La resolucion minima admitida por el script es 16 pixeles. El directorio de
+resultados es Resultados/Resultados_Input_Captura_Visual/.
+
+3. EXTRACCION DE CARACTERISTICAS DE UNA IMAGEN
+----------------------------------------------
+extraer_caracteristicas_imagen() abre la captura, conserva su ancho y alto
+originales y convierte una copia a RGB. La copia se reduce proporcionalmente
+para que quepa en un maximo de 256 por 256 pixeles. Los calculos de color y
+textura se hacen sobre esta version reducida para que sean mas ligeros.
+
+A partir de los canales rojo (R), verde (G) y azul (B), cada uno escalado de
+0 a 1, calcula descriptores de:
+
+Dimensiones:
+- visual_image_width y visual_image_height: ancho y alto originales.
+- visual_aspect_ratio: ancho dividido por alto.
+
+Color medio:
+- visual_mean_red, visual_mean_green y visual_mean_blue: promedio de cada
+  canal RGB sobre los pixeles reducidos.
+
+Brillo:
+- La luminancia se aproxima con
+  0.2126*R + 0.7152*G + 0.0722*B.
+- visual_luminance_mean y visual_luminance_std resumen el brillo medio y su
+  variacion en toda la captura.
+- visual_grid_luminance_std divide la imagen en una rejilla de 4 por 4,
+  calcula el brillo medio de cada celda y mide la desviacion estandar de esos
+  promedios. Resume si las zonas de la captura tienen brillos distintos.
+
+Saturacion y color:
+- La saturacion aproximada de cada pixel es el canal RGB maximo menos el
+  minimo. visual_saturation_mean y visual_saturation_std resumen su promedio
+  y variacion.
+- visual_color_entropy_mean calcula una entropia para cada canal RGB usando
+  un histograma de 16 intervalos entre 0 y 1, y devuelve el promedio de las
+  tres entropias. Una entropia mayor suele corresponder a una distribucion de
+  intensidades menos concentrada, pero no identifica colores u objetos.
+- visual_quantized_color_count cuenta cuantos triples RGB distintos quedan
+  al agrupar cada canal en 8 niveles. Es un recuento aproximado de diversidad
+  cromatica, no un numero exacto de colores perceptualmente diferentes.
+
+Bordes:
+- Se calculan diferencias absolutas de luminancia entre pixeles vecinos en
+  direccion horizontal y vertical.
+- visual_edge_density es la proporcion de diferencias que alcanzan o superan
+  0.16. Aproxima la cantidad de cambios fuertes de brillo; no identifica por
+  si sola texto, objetos ni contornos semanticos.
+
+Tamano de elementos:
+- visual_aoi_component_area_mean_fraction y
+  visual_aoi_component_area_max_fraction estiman el area relativa media y
+  maxima de componentes contiguos de celdas clasificadas como text_like o
+  visual_like. Es una heuristica de rejilla, no una segmentacion de objetos.
+
+Saliencia aproximada:
+- Se combina el contraste local de luminancia con la distancia de color al
+  promedio global de la captura.
+- visual_saliency_mean, visual_saliency_std y visual_saliency_max resumen el
+  mapa heuristico. visual_saliency_top_decile_concentration mide la fraccion
+  de saliencia acumulada en el 10% de pixeles de mayor puntuacion, y
+  visual_saliency_grid_std resume la variacion espacial de saliencia en una
+  rejilla 4 por 4. No es un modelo de saliencia entrenado ni una medicion
+  psicofisica.
+
+4. FRACCIONES Y DISTRIBUCION ESPACIAL DE AOI
+--------------------------------------------
+El script llama a detectar_aois_imagen() de Funciones_AOI.py. Esa funcion
+divide la captura en una rejilla de 16 columnas por 12 filas y clasifica cada
+celda en text_like, visual_like u other mediante umbrales de contraste,
+saturacion y densidad de bordes.
+
+visual_text_like_aoi_fraction, visual_image_like_aoi_fraction y
+visual_other_aoi_fraction son la fraccion de celdas que recibieron cada clase.
+En condiciones normales las tres fracciones suman uno. Estos nombres
+describen patrones de pixeles: el algoritmo no usa OCR, no reconoce palabras
+ni confirma que una region contenga una imagen real. Se deben interpretar
+como proxies heuristicas y no como anotaciones semanticas.
+
+Ademas, visual_text_like_aoi_<cuadrante>_fraction y
+visual_visual_like_aoi_<cuadrante>_fraction describen la fraccion de cada
+cuadrante (arriba/abajo e izquierda/derecha) ocupada por cada tipo AOI. La
+clasificacion de AOI y las areas de componentes siguen siendo aproximaciones
+basadas en pixeles.
+
+5. UNA FILA POR CAPTURA Y UNION CON LOS LOGS
+-------------------------------------------
+extraer_caracteristicas_imagenes() elimina nombres repetidos, los procesa en
+orden y crea una fila por captura. Si falta un archivo de imagen, genera un
+FileNotFoundError en vez de continuar con caracteristicas incompletas.
+
+ejecutar() llama a extraer_datos_fijaciones_completas() de
+Funciones_Entradas.py para construir targets por participante e imagen; no
+importa el script 11. A continuacion calcula los descriptores de cada captura
+y los une con los targets usando image_name. La relacion es de muchos
+registros participante-imagen a una fila de imagen (many_to_one): una captura
+puede repetirse para varios participantes.
+
+El conjunto de datos mantiene image_name, participant y official_split como
+identificadores y agrega image_path como ruta absoluta a la captura. El modelo
+recibe image_path y las caracteristicas visuales con prefijo visual_. Ni el
+nombre de imagen, el participante, la particion ni las fijaciones se utilizan
+como predictores. Si falta una captura o alguna caracteristica, el script se
+detiene con un error.
+
+6. TARGETS Y ENTRENAMIENTO
+--------------------------
+PROXY_TARGET_COLUMNS contiene los 11 objetivos calculados sobre el registro
+completo:
+- Tiempo hasta la primera fijacion en una AOI clasificable.
+- Tiempo acumulado en celdas text_like y visual_like.
+- Longitud del scanpath y numero de fijaciones.
+- Entropia de atencion, dispersion espacial y cobertura de rejilla.
+- Numero de AOI distintas visitadas y transiciones entre ellas.
+- Duracion media de fijacion.
+
+Los objetivos basados en AOI heredan las limitaciones de la clasificacion por
+pixeles descrita anteriormente. Ademas, como las caracteristicas de imagen se
+repiten para las sesiones de todos los participantes que vieron esa imagen,
+el modelo relaciona propiedades de la interfaz con diferencias entre
+observaciones, pero no recibe informacion sobre la mirada inicial de cada
+participante.
+
+Con RUN_TRAINING=True, entrenar_predecir_targets_multimodal() ajusta un
+AutoGluon MultiModalPredictor por target. Cada ajuste recibe unicamente
+image_path, las caracteristicas visuales y la etiqueta del target, y usa filas
+Train; el rendimiento se mide en filas Test segun la particion oficial por
+imagen. No crea una particion aleatoria. Guarda RMSE, MAE, R2, accuracy y F1
+ponderado tras clasificar los targets en terciles calculados solo con Train.
+La seleccion SHAP top 3 tabular se omite explicitamente para esta modalidad.
+
+Despues, el script calcula los proxies de eficiencia de exploracion,
+distribucion de atencion y estrategia tanto sobre los valores reales como
+sobre las predicciones. La normalizacion utiliza los valores Train para que
+ambos tipos de proxy compartan la escala.
+
+7. ARCHIVOS DE SALIDA
+---------------------
+Cada ejecucion crea una carpeta fechada en
+Resultados/Resultados_Input_Captura_Visual/:
+- dataset_captura_visual_y_targets.csv: descriptores visuales, targets e
+  identificadores.
+- predicciones_test.csv: identificadores, targets observados y predicciones
+  para el conjunto Test.
+- predicciones_y_proxies_test.csv: targets reales, predicciones y proxies
+  observados/predichos de Test, si se entreno.
+- metricas_test.csv y comparacion_modelos.csv: resumen del rendimiento.
+- Carpetas por target con los modelos multimodales, predicciones y metricas.
+  comparacion_modelos.csv registra el MultiModalPredictor evaluado por target;
+  no incluye leaderboard ni comparaciones de modelos tabulares.
+
+Con RUN_TRAINING=False solo se genera el dataset; no se ajustan modelos ni se
+crean predicciones.
+
+8. COMO LEER LOS RESULTADOS Y LOS ERRORES
+-----------------------------------------
+El script valida que el tamano de analisis sea al menos 16, que el tiempo
+limite sea positivo, que haya metadatos y que se puedan calcular targets. Los
+errores indican, por ejemplo, que faltan capturas, no hay datos utilizables o
+la union produjo caracteristicas ausentes.
+
+Un buen resultado de Test indica que la captura y sus descriptores se
+relacionan con los targets en las imagenes reservadas. No demuestra que el
+color, el brillo o los bordes causen un patron de mirada ni que la heuristica
+AOI haya reconocido correctamente texto u objetos. Para una interpretacion
+fiable, conviene revisar tambien el tamano y la variedad del conjunto de
+imagenes y participantes, las metricas por target y las limitaciones del split
+oficial.

@@ -37,7 +37,7 @@ MAX_PAIRS_PER_GROUP = 1000  # Entero >= 1; limita combinaciones por persona/imag
 RANDOM_SEED = 42  # Entero; controla el muestreo reproducible de pares.
 
 # ==========================================
-# FASE 1: CARGA DE SCANPATHS
+# CARGA DE SCANPATHS
 # ==========================================
 def cargar_scanpaths(logs_dir, metadata, user_filter=None, split_filter="all"):
     """Carga secuencias ordenadas de coordenadas con filtros del dataset.
@@ -120,7 +120,7 @@ def cargar_scanpaths(logs_dir, metadata, user_filter=None, split_filter="all"):
 
 
 # ==========================================
-# FASE 2: DISTANCIA ENTRE TRAYECTORIAS
+# EXTRACCIÓN DE DISTANCIAS ENTRE TRAYECTORIAS
 # ==========================================
 
 # Distancia DTW (Dynamic Time Warping) entre dos secuencias de coordenadas.
@@ -186,7 +186,7 @@ def seleccionar_pares(items, maximum_pairs, random_generator):
 
 
 # ==========================================
-# FASE 3: COMPARACIONES Y RESUMENES
+# ANÁLISIS COMPARATIVO Y RESÚMENES
 # ==========================================
 def comparar_scanpaths(scanpaths, maximum_pairs_per_group=1000, seed=42):
     """Compara dentro de participante y entre participantes por interfaz."""
@@ -304,10 +304,11 @@ def resumir_comparaciones(pairs):
 
 
 # ==========================================
-# FASE 4: EJECUCION
+# EJECUCIÓN DEL PIPELINE
 # ==========================================
 def ejecutar():
     """Carga los datos filtrados, calcula DTW y guarda tablas de resultados."""
+    # FASE 1: PREPARACIÓN DE LOS DATOS
     if MAX_PAIRS_PER_GROUP < 1:
         raise ValueError("MAX_PAIRS_PER_GROUP debe ser al menos 1.")
     if SPLIT_FILTER not in {"all", "train", "test"}:
@@ -320,6 +321,7 @@ def ejecutar():
     if metadata.empty:
         raise ValueError("No hay imagenes en image_types.csv para ese filtro.")
 
+    # FASE 2: EXTRACCIÓN DE CARACTERÍSTICAS DE LOS SCANPATHS
     scanpaths = cargar_scanpaths(
         logs_dir=LOGS_DIR,
         metadata=metadata,
@@ -329,6 +331,7 @@ def ejecutar():
     if not scanpaths:
         raise ValueError("No se encontraron scanpaths validos para esos filtros.")
 
+    # FASE 3: ENTRENAMIENTO DE MODELOS (NO APLICA; SE COMPARAN DISTANCIAS DTW)
     pairs = comparar_scanpaths(
         scanpaths=scanpaths,
         maximum_pairs_per_group=MAX_PAIRS_PER_GROUP,
@@ -336,6 +339,7 @@ def ejecutar():
     )
     overall, by_group = resumir_comparaciones(pairs)
 
+    # FASE 4: EVALUACIÓN DE LOS RESULTADOS OBTENIDOS
     # Cada ejecucion y combinacion de filtros tiene su propia carpeta.
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     category_name = (CATEGORY_FILTER or "todas").casefold()

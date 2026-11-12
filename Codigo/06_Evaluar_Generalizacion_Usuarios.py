@@ -20,6 +20,11 @@ from Funciones_Comunes import (
     PROJECT_DIR,
     leer_metadatos,
 )
+from Funciones_Modelado import (
+    evaluar_modelos_autogluon,
+    guardar_explicacion_shap,
+    metricas_clasificacion_por_terciles,
+)
 
 
 modulo02 = import_module("02_Exploracion_AutoGluon")
@@ -51,7 +56,7 @@ TARGETS_TO_PREDICT = tuple(sorted(TARGET_COLUMNS))
 
 
 # ==========================================
-# FASE 1: DIVISION POR PARTICIPANTE
+# DIVISIÓN POR PARTICIPANTE
 # ==========================================
 def dividir_por_participante(data, test_size, random_seed):
     """Separa usuarios completos y comprueba que no hay usuarios compartidos."""
@@ -84,7 +89,7 @@ def dividir_por_participante(data, test_size, random_seed):
 
 
 # ==========================================
-# FASE 2: ENTRENAMIENTO Y COMPARACION
+# ENTRENAMIENTO Y EVALUACIÓN
 # ==========================================
 def entrenar_y_evaluar(train_data, test_data, target, time_limit, run_dir):
     """Entrena en unas personas y evalua en otras con las mismas interfaces."""
@@ -117,6 +122,25 @@ def entrenar_y_evaluar(train_data, test_data, target, time_limit, run_dir):
     # Comparamos tambien con un baseline que predice la media de personas Train.
     metrics = predictor.evaluate(model_test, display=False)
     predictions = predictor.predict(model_test[FEATURE_COLUMNS])
+    model_comparison = evaluar_modelos_autogluon(
+        predictor=predictor,
+        train_target=model_train[target],
+        test_features=model_test[FEATURE_COLUMNS],
+        test_target=model_test[target],
+        context={"target": target},
+    )
+    model_comparison.to_csv(
+        run_dir / "comparacion_modelos.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
+    guardar_explicacion_shap(
+        predictor=predictor,
+        train_features=model_train[FEATURE_COLUMNS],
+        test_features=model_test[FEATURE_COLUMNS],
+        output_dir=run_dir / "shap",
+        context={"target": target},
+    )
     # El baseline siempre predice la media observada en usuarios Train.
     baseline_value = float(model_train[target].mean())
     baseline_rmse = float(
@@ -127,6 +151,11 @@ def entrenar_y_evaluar(train_data, test_data, target, time_limit, run_dir):
     results = {
         "target": target,
         **metrics,
+        **metricas_clasificacion_por_terciles(
+            train_target=model_train[target],
+            actual_target=model_test[target],
+            predictions=predictions,
+        ),
         "model_rmse_positive": model_rmse,
         "baseline_mean_rmse": baseline_rmse,
         "rmse_improvement_percent": (
@@ -159,12 +188,13 @@ def entrenar_y_evaluar(train_data, test_data, target, time_limit, run_dir):
 
 
 # ==========================================
-# FASE 3: EJECUCION
+# EJECUCIÓN DEL PIPELINE
 # ==========================================
 def ejecutar():
     """Prepara la tabla, separa usuarios y guarda la evaluacion complementaria."""
     if not 0 < TEST_SIZE < 1:
         raise ValueError("TEST_SIZE debe estar entre 0 y 1.")
+    # FASE 1: PREPARACIÓN DE LOS DATOS
     # La metadata usa las mismas columnas y el mismo separador de los demas scripts.
     metadata = leer_metadatos(
         path=METADATA_PATH,
@@ -176,11 +206,14 @@ def ejecutar():
         raise ValueError("No hay imagenes Train para los filtros seleccionados.")
 
     # USER_FILTER debe permanecer None para que se puedan crear dos grupos.
+    # FASE 2: EXTRACCIÓN DE CARACTERÍSTICAS
     data = extraer_ejemplos(
         logs_dir=LOGS_DIR,
         metadata=metadata,
         cutoff_seconds=CUTOFF_SECONDS,
         user_filter=USER_FILTER,
+        # Este analisis usa solo los targets originales y no necesita clasificar imagenes.
+        include_aoi_targets=False,
     )
     if data.empty:
         raise ValueError("No se generaron ejemplos con los filtros actuales.")
@@ -219,6 +252,8 @@ def ejecutar():
     print(f"Resultados: {run_dir}")
 
     results_by_target = []
+    model_comparisons = []
+    # FASE 3: ENTRENAMIENTO DE MODELOS
     for target in TARGETS_TO_PREDICT:
         print(f"Target: {target}")
         target_dir = run_dir / target
@@ -231,11 +266,20 @@ def ejecutar():
             run_dir=target_dir,
         )
         results_by_target.append(results)
+        model_comparisons.append(
+            pd.read_csv(target_dir / "comparacion_modelos.csv")
+        )
         print(f"Metricas para participantes no vistos: {results}")
 
+    # FASE 4: EVALUACIÓN DE LOS RESULTADOS OBTENIDOS
     summary_path = run_dir / "resumen_metricas_usuarios_no_vistos.csv"
     pd.DataFrame(results_by_target).to_csv(
         summary_path,
+        index=False,
+        encoding="utf-8-sig",
+    )
+    pd.concat(model_comparisons, ignore_index=True).to_csv(
+        run_dir / "comparacion_modelos.csv",
         index=False,
         encoding="utf-8-sig",
     )

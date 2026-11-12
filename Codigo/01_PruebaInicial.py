@@ -14,6 +14,13 @@ from Funciones_Comunes import (
     LOGS_DIR,
     METADATA_PATH,
     PROJECT_DIR,
+    leer_metadatos,
+    normalizar_nombre_imagen,
+)
+from Funciones_Modelado import (
+    evaluar_modelos_autogluon,
+    guardar_explicacion_shap,
+    metricas_clasificacion_por_terciles,
 )
 
 RESULTS_DIR = PROJECT_DIR / "Resultados" / "Resultados_PruebaInicial"
@@ -34,7 +41,7 @@ TIME_LIMIT_SECONDS = 1200  # Segundos de AutoGluon; debe ser un entero positivo.
 
 
 # ==========================================
-# FASE 1: SELECCIÓN ESTRATIFICADA
+# FASE 1: PREPARACIÓN DE LOS DATOS
 # ==========================================
 def seleccionar_subconjunto(
     ruta_metadata,
@@ -50,32 +57,17 @@ def seleccionar_subconjunto(
         n_test_por_categoria (int): máximo de interfaces Test por categoría.
 
     Returns:
-        dict: pares con formato {"nombre_interfaz": "Train" o "Test"}.
+        Metadata seleccionada, indexada por nombre normalizado.
         Devuelve un diccionario vacío si falta el archivo o no hay selección.
     """
     print(f"Cargando metadata desde {ruta_metadata}...")
     try:
-        df_meta = pd.read_csv(ruta_metadata, sep=';')
+        df_meta = leer_metadatos(path=ruta_metadata).reset_index(drop=True)
     except FileNotFoundError:
         print(f"ERROR: No se encontró el archivo de metadatos en {ruta_metadata}")
         return {}
 
-    # DataFrame es una tabla de filas y columnas. Estas son las columnas
-    # requeridas para identificar cada interfaz, categoría y tipo de split.
-    columnas_esperadas = ["Image Name", "Category", "Train/Test"]
-    columnas_faltantes = [col for col in columnas_esperadas if col not in df_meta.columns]
-    if columnas_faltantes:
-        print(f"ERROR: Faltan columnas en metadata: {columnas_faltantes}")
-        print(df_meta.columns.tolist())
-        return {}
-
-    # Usamos copy() para modificar una copia independiente del DataFrame original.
-    df_meta = df_meta[columnas_esperadas].copy()
-
-    # Normalizamos los valores de texto.
-    df_meta["Image Name"] = df_meta["Image Name"].astype(str).str.strip()
-    df_meta["Category"] = df_meta["Category"].astype(str).str.strip()
-    df_meta["Train/Test"] = df_meta["Train/Test"].astype(str).str.strip()
+    # leer_metadatos valida las columnas y prepara _image_key y _split.
 
     # Lista donde se guardará un DataFrame con la muestra de cada grupo.
     seleccionadas = []
@@ -88,10 +80,10 @@ def seleccionar_subconjunto(
     # En cada iteración, (_, split_type) es la tupla de agrupación y grupo es
     # el DataFrame de filas correspondiente. "_" recibe Category, que aquí no
     # se necesita; split_type recibe el valor de Train/Test.
-    for (_, split_type), grupo in df_meta.groupby(["Category", "Train/Test"]):
-        if str(split_type).lower() == "train":
+    for (_, split_type), grupo in df_meta.groupby(["Category", "_split"]):
+        if split_type == "train":
             n_muestras = n_train_por_categoria
-        elif str(split_type).lower() == "test":
+        elif split_type == "test":
             n_muestras = n_test_por_categoria
         else:
             # Ignoramos grupos cuyo valor no sea Train ni Test.
@@ -109,13 +101,18 @@ def seleccionar_subconjunto(
         print("ADVERTENCIA: No se pudo realizar la selección estratificada.")
         return {}
 
-    # concat une los grupos seleccionados en una sola tabla. ignore_index=True
-    # genera un índice consecutivo nuevo para el DataFrame resultante.
+    # concat une los DataFrames de la lista en uno solo. ignore_index renumera
+    # las filas del DataFrame resultante de forma consecutiva.
     df_seleccion = pd.concat(seleccionadas, ignore_index=True)
 
-    # zip empareja los nombres de interfaz con Train/Test y dict crea el formato:
-    # {"nombre_interfaz": "Train"}.
-    return dict(zip(df_seleccion["Image Name"], df_seleccion["Train/Test"]))
+    # Salida: Diccionario NombreNormalizado -> {image_name, split}. Se usa para filtrar los logs.
+    return {
+        row["_image_key"]: {
+            "image_name": row["Image Name"],
+            "split": row["_split"],
+        }
+        for _, row in df_seleccion.iterrows()
+    }
 
 # ==========================================
 # FASE 2: EXTRACCIÓN DE CARACTERÍSTICAS
@@ -125,8 +122,7 @@ def procesar_archivos(ruta_datos, filtro_interfaces):
 
     Args:
         ruta_datos (str): carpeta donde se encuentran los CSV de los logs.
-        filtro_interfaces (dict): diccionario con formato
-            {"nombre_interfaz": "Train" o "Test"}.
+        filtro_interfaces: metadata indexada por nombre de imagen normalizado.
 
     Returns:
         pandas.DataFrame: una fila por interfaz y una columna por característica;
@@ -151,22 +147,22 @@ def procesar_archivos(ruta_datos, filtro_interfaces):
             if "MEDIA_NAME" not in df.columns:
                 continue
 
-            # Trabajamos sobre una copia y normalizamos los nombres de interfaz.
+            # Normalizamos la misma clave que usan los otros scripts.
             df = df.copy()
-            df["MEDIA_NAME"] = df["MEDIA_NAME"].astype(str).str.strip()
+            df["_image_key"] = df["MEDIA_NAME"].map(normalizar_nombre_imagen)
 
             # FPOGV marca si la muestra de mirada es válida. Solo filtramos si
             # esa columna existe en el archivo.
             if "FPOGV" in df.columns:
                 df = df[df["FPOGV"] == 1].copy()
 
-            # groupby("MEDIA_NAME") produce grupos por interfaz:
-            # media_name es el nombre de la interfaz y grupo es el DataFrame
+            # La clave normalizada permite asociar logs y metadata de forma estable.
             # con todas las filas válidas que pertenecen a esa interfaz.
-            for media_name, grupo in df.groupby("MEDIA_NAME"):
+            for image_key, grupo in df.groupby("_image_key"):
                 # Se omiten interfaces no seleccionadas y con pocas observaciones.
-                if media_name not in filtro_interfaces or len(grupo) < 3:
+                if image_key not in filtro_interfaces or len(grupo) < 3:
                     continue
+                image_metadata = filtro_interfaces[image_key]
 
                 # Series vacías numéricas: se usan si faltan columnas de pupila
                 # o no hay mediciones válidas. Una Serie es una columna de pandas.
@@ -186,8 +182,8 @@ def procesar_archivos(ruta_datos, filtro_interfaces):
                 # DataFrame. Los valores son agregados calculados para la interfaz.
                 features = {
                     # Identificación y split oficial de la interfaz.
-                    "media_name": media_name,
-                    "split_oficial": filtro_interfaces[media_name],
+                    "media_name": image_metadata["image_name"],
+                    "split_oficial": image_metadata["split"],
 
                     # len cuenta filas. mean calcula la media y std la desviación
                     # estándar de cada Serie numérica.
@@ -230,7 +226,7 @@ def procesar_archivos(ruta_datos, filtro_interfaces):
     return df_resultado
 
 # ==========================================
-# FASE 3: AUTOML
+# FASE 3: ENTRENAMIENTO DE MODELOS
 # ==========================================
 # Este bloque solo se ejecuta al iniciar este archivo directamente, no cuando
 # se importa desde otro módulo de Python.
@@ -242,7 +238,7 @@ if __name__ == "__main__":
     run_dir = RESULTS_DIR / id_ejecucion
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    # Obtiene un diccionario {nombre_interfaz: split} a partir de los metadatos.
+    # FASE 1: PREPARACIÓN DE LOS DATOS
     interfaces_seleccionadas = seleccionar_subconjunto(
         ruta_metadata=METADATA_PATH
     )
@@ -255,6 +251,7 @@ if __name__ == "__main__":
         #     # si pertenece al conjunto Train o Test.
         #     print(f"  - {interfaz}, {interfaces_seleccionadas[interfaz]}")
         print("Extrayendo características de los archivos de log...")
+        # FASE 2: EXTRACCIÓN DE CARACTERÍSTICAS
         df_tabular = procesar_archivos(
             ruta_datos=LOGS_DIR,
             filtro_interfaces=interfaces_seleccionadas,
@@ -286,7 +283,9 @@ if __name__ == "__main__":
                 print("No hay suficientes filas para entrenar o evaluar. Revisa la selección del split.")
             else:
                 resultados_por_target = []
+                comparaciones_por_target = []
 
+                # FASE 3: ENTRENAMIENTO DE MODELOS
                 for target in TARGETS_TO_PREDICT:
                     if target not in train_data.columns:
                         raise ValueError(f"No se ha generado la columna target '{target}'.")
@@ -324,12 +323,43 @@ if __name__ == "__main__":
                         presets="medium_quality",
                     )
 
+                    # FASE 4: EVALUACIÓN DE LOS RESULTADOS OBTENIDOS
                     resultados = predictor.evaluate(
                         data=test_m1,
                         display=False,
                     )
-                    fila_resultados = {"target": target, **resultados}
+                    test_features = test_m1.drop(columns=[target])
+                    best_predictions = predictor.predict(test_features)
+                    fila_resultados = {
+                        "target": target,
+                        **resultados,
+                        **metricas_clasificacion_por_terciles(
+                            train_target=train_m1[target],
+                            actual_target=test_m1[target],
+                            predictions=best_predictions,
+                        ),
+                    }
                     resultados_por_target.append(fila_resultados)
+                    model_comparison = evaluar_modelos_autogluon(
+                        predictor=predictor,
+                        train_target=train_m1[target],
+                        test_features=test_features,
+                        test_target=test_m1[target],
+                        context={"target": target},
+                    )
+                    model_comparison.to_csv(
+                        target_dir / "comparacion_modelos.csv",
+                        index=False,
+                        encoding="utf-8-sig",
+                    )
+                    comparaciones_por_target.append(model_comparison)
+                    guardar_explicacion_shap(
+                        predictor=predictor,
+                        train_features=train_m1.drop(columns=[target]),
+                        test_features=test_features,
+                        output_dir=target_dir / "shap",
+                        context={"target": target},
+                    )
 
                     ruta_csv_evaluacion = target_dir / "evaluacion.csv"
                     pd.DataFrame([fila_resultados]).to_csv(
@@ -346,5 +376,10 @@ if __name__ == "__main__":
                     encoding="utf-8-sig",
                 )
                 print(f"Resumen de evaluaciones guardado en: {ruta_csv_resumen}")
+                pd.concat(comparaciones_por_target, ignore_index=True).to_csv(
+                    run_dir / "comparacion_modelos.csv",
+                    index=False,
+                    encoding="utf-8-sig",
+                )
         else:
             print("No se generaron datos tabulares. Revisa los nombres de archivo y las columnas.")
