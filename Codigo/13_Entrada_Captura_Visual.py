@@ -32,6 +32,8 @@ from Funciones_Modelado import (
     entrenar_predecir_targets_multimodal,
 )
 
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, accuracy_score
+
 
 RESULTS_DIR = PROJECT_DIR / "Resultados" / "Resultados_Input_Captura_Visual"
 
@@ -405,9 +407,48 @@ def ejecutar():
         index=False,
         encoding="utf-8-sig",
     )
-    print(f"Metricas de targets: {run_dir / 'metricas_test.csv'}")
-    print(f"Predicciones y proxies: {run_dir / 'predicciones_y_proxies_test.csv'}")
-    print(metrics[["target", "rmse", "mae", "r2"]].to_string(index=False))
+    proxy_metrics = []
+    proxies_continuos = [
+        "proxy_exploration_efficiency",
+        "proxy_attention_distribution",
+        "proxy_exploration_strategy"
+    ]
+    
+    for proxy in proxies_continuos:
+        valid_rows = predictions[f"actual_{proxy}"].notna() & predictions[f"predicted_{proxy}"].notna()
+        actual = predictions.loc[valid_rows, f"actual_{proxy}"]
+        pred = predictions.loc[valid_rows, f"predicted_{proxy}"]
+        
+        if len(actual) > 1:
+            proxy_metrics.append({
+                "proxy": proxy,
+                "test_rows": len(actual),
+                "rmse": float(np.sqrt(mean_squared_error(actual, pred))),
+                "mae": float(mean_absolute_error(actual, pred)),
+                "r2": float(r2_score(actual, pred))
+            })
+            
+    valid_labels = (predictions["actual_proxy_exploration_strategy_label"] != "No calculable") & \
+                   (predictions["predicted_proxy_exploration_strategy_label"] != "No calculable")
+    
+    actual_labels = predictions.loc[valid_labels, "actual_proxy_exploration_strategy_label"]
+    pred_labels = predictions.loc[valid_labels, "predicted_proxy_exploration_strategy_label"]
+    
+    accuracy_estrategia = accuracy_score(actual_labels, pred_labels) if len(actual_labels) > 0 else np.nan
+
+    df_proxy_metrics = pd.DataFrame(proxy_metrics)
+    df_proxy_metrics.to_csv(run_dir / "metricas_proxies_test.csv", index=False, encoding="utf-8-sig")
+
+    # =====================================================================
+    # PRINTS FINALES ACTUALIZADOS
+    # =====================================================================
+    print(f"\nMetricas de targets base: {run_dir / 'metricas_test.csv'}")
+    print(f"Metricas de proxies (NUEVO): {run_dir / 'metricas_proxies_test.csv'}")
+    print(f"Accuracy de la Etiqueta de Estrategia: {accuracy_estrategia:.2%}")
+    print(f"Comparacion de modelos: {run_dir / 'comparacion_modelos.csv'}")
+    print(f"Predicciones y proxies (Microdatos): {run_dir / 'predicciones_y_proxies_test.csv'}")
+    print("\n--- Resumen de error en los 3 Proxies ---")
+    print(df_proxy_metrics.to_string(index=False))
 
 
 if __name__ == "__main__":
