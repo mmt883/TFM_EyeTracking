@@ -32,6 +32,10 @@ from Funciones_Modelado import (
     entrenar_predecir_targets,
 )
 
+#Omite los warnings de fastai que no afectan a la ejecucion y ensucian la salida.
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="fastai.*")
+
 
 RESULTS_DIR = PROJECT_DIR / "Resultados" / "Resultados_Input_Ventana_Inicial"
 
