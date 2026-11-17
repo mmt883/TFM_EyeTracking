@@ -9,13 +9,12 @@ de CONFIGURACION. Sus funciones tambien se reutilizan desde otros scripts.
 """
 
 import os
+import importlib
 from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
-from autogluon.tabular import TabularPredictor
 
 from Funciones_Comunes import (
     METADATA_COLUMNS,   # Columnas de image_types.csv que se usan en este pipeline.
@@ -168,6 +167,17 @@ def entrenar_y_evaluar(data, target, time_limit, run_dir):
     """
     if target not in TARGET_COLUMNS:
         raise ValueError(f"Target no reconocido: {target}")
+
+    # Importar AutoGluon solo al entrenar permite exportar caracteristicas sin
+    # tener instalada esta dependencia.
+    try:
+        TabularPredictor = importlib.import_module("autogluon.tabular").TabularPredictor
+    except ModuleNotFoundError as error:
+        if error.name == "autogluon" or (error.name and error.name.startswith("autogluon.")):
+            raise ImportError(
+                "AutoGluon no está instalado. Instálalo con 'pip install autogluon.tabular'."
+            ) from error
+        raise
 
     # Se construye una tabla solo con las entradas, el target y el split. La
     # conversion numerica detecta targets invalidos antes de llamar al modelo.
