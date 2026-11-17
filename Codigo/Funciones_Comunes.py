@@ -7,8 +7,9 @@ import numpy as np
 import pandas as pd
 
 
+# Los nombres de las rutas derivan de la ubicacion de este modulo, no del
+# directorio de trabajo desde el que se invoque un script.
 METADATA_COLUMNS = ["Image Name", "Category", "Train/Test"]
-
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 DATASET_DIR = PROJECT_DIR / "Data" / "UEyes_dataset"
 LOGS_DIR = DATASET_DIR / "eyetracker_logs"
@@ -26,7 +27,9 @@ def normalizar_nombre_imagen(value):
         value: Nombre o ruta de la imagen, habitualmente procedente del log.
 
     Returns:
-        Nombre de archivo normalizado para usar como clave de comparación.
+        nombre de archivo normalizado para usar como clave de comparación. La
+        extension se conserva porque algunos conjuntos pueden tener nombres base
+        iguales en formatos de imagen distintos.
     """
     return Path(str(value).strip()).name.casefold()
 
@@ -34,16 +37,19 @@ def normalizar_nombre_imagen(value):
 def leer_metadatos(path, category_filter=None):
     """Lee, valida y normaliza los metadatos oficiales del dataset.
 
-    Solo conserva las filas con una partición Train/Test reconocida y mantiene
-    una fila por imagen. Si se especifica una categoría, la aplica sin
-    distinguir mayúsculas y minúsculas.
+    Solo conserva las filas con una particion Train/Test reconocida y mantiene
+    una fila por clave de imagen normalizada. Si una clave aparece repetida,
+    prevalece su primera fila. Si se especifica una categoria, la aplica sin
+    distinguir mayusculas y minusculas.
 
     Args:
         path: Ruta al CSV oficial, separado por punto y coma.
         category_filter: Categoría opcional para filtrar, o ``None``.
 
     Returns:
-        DataFrame indexado por ``_image_key`` con los metadatos y el split.
+        DataFrame indexado por ``_image_key`` con las columnas oficiales y dos
+        columnas auxiliares: ``_image_key`` para asociar logs e imagenes y
+        ``_split`` en minusculas para filtrar Train/Test.
 
     Raises:
         ValueError: Si faltan columnas oficiales requeridas en el CSV.
@@ -80,7 +86,10 @@ def participante_desde_nombre_archivo(path):
             de dígitos, como ``00_kh000_fixations.csv``.
 
     Returns:
-        Identificador en minúsculas, o ``None`` si el nombre no contiene uno.
+        Identificador en minusculas, o ``None`` si el nombre no contiene uno.
+        Se busca en el nombre base (no en las carpetas de la ruta) y se exige
+        que ``kh`` y sus digitos esten delimitados por inicio, guion bajo o
+        guion.
     """
     match = re.search(r"(?:^|[_-])(kh\d+)(?:[_-]|$)", Path(path).name, re.IGNORECASE)
     return match.group(1).casefold() if match else None
@@ -93,8 +102,10 @@ def obtener_columna_tiempo(columns):
         columns: Nombres de columnas disponibles en el archivo de datos.
 
     Returns:
-        El nombre original de la primera columna que empieza por ``TIME``
-        excepto ``TIMETICK``, o ``None`` si no existe.
+        el nombre original de la primera columna cuyo nombre normalizado
+        empieza por ``TIME`` excepto ``TIMETICK``, o ``None`` si no existe.
+        Se devuelve el nombre original para indexar el DataFrame sin renombrar
+        columnas del archivo fuente.
     """
     for column in columns:
         normalized = str(column).strip().upper()
@@ -106,8 +117,10 @@ def obtener_columna_tiempo(columns):
 def columna_numerica(frame, name):
     """Devuelve una columna numérica y convierte datos inválidos en NaN.
 
-    Si la columna solicitada no existe, crea una serie de NaN con el mismo
-    índice que el DataFrame para mantener la alineación de las filas.
+    Los valores no convertibles se vuelven NaN. Si la columna solicitada no
+    existe, crea una serie de NaN con el mismo indice que el DataFrame para
+    mantener la alineacion de las filas y permitir que el llamador aplique su
+    propia regla para datos ausentes.
 
     Args:
         frame: DataFrame que contiene las mediciones.
@@ -137,11 +150,21 @@ def resumir_fijaciones(early, future, category):
         Diccionario de características tempranas y targets futuros, incluidos
         el recuento y la longitud de scanpath, calculada sumando ``SACCADE_MAG``
         en cada ventana para mantener el mismo criterio que la prueba inicial.
+        ``early_step_distance_mean`` es la media de distancias euclidianas
+        entre coordenadas consecutivas; no es la suma de ``SACCADE_MAG``
+        guardada en ``early_scanpath_length``. Los campos de duracion y
+        recuento vacios de la ventana temprana se representan como cero. Para
+        la ventana futura, el recuento y la suma de scanpath vacios son cero;
+        la media de duracion queda NaN si no hay mediciones validas.
     """
+    # Las columnas se convierten por separado para que una columna ausente o
+    # con texto invalido no impida calcular las demas caracteristicas.
     early_x = columna_numerica(frame=early, name="FPOGX")
     early_y = columna_numerica(frame=early, name="FPOGY")
     early_duration = columna_numerica(frame=early, name="FPOGD").dropna()
 
+    # Solo pares x/y completos entran en estadisticos espaciales. diff()
+    # conserva el orden de las filas recibido desde el extractor.
     early_coordinates = pd.DataFrame({"x": early_x, "y": early_y}).dropna()
     early_steps = np.hypot(
         early_coordinates["x"].diff(), early_coordinates["y"].diff()
@@ -155,6 +178,8 @@ def resumir_fijaciones(early, future, category):
     early_x_std = 0.0 if pd.isna(early_x_std) else float(early_x_std)
     early_y_std = 0.0 if pd.isna(early_y_std) else float(early_y_std)
 
+    # Las etiquetas futuras se calculan exclusivamente con la ventana future;
+    # no se mezclan aqui con las medidas tempranas que alimentan el modelo.
     future_duration = columna_numerica(frame=future, name="FPOGD").dropna()
     future_saccade_magnitude = columna_numerica(
         frame=future, name="SACCADE_MAG"

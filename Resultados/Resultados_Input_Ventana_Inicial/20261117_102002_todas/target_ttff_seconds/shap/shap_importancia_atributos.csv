@@ -1,0 +1,12 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_ttff_seconds,early_y_mean,0.01639931240677834,0.0003962131142616357
+target_ttff_seconds,early_fixation_count,0.012818231999874113,-0.009013311803340907
+target_ttff_seconds,early_x_mean,0.010763669922947883,0.0047599544376134865
+target_ttff_seconds,early_x_std,0.009354081012308604,-0.0007086415514349937
+target_ttff_seconds,early_step_distance_mean,0.007504283025860793,-0.003405282542109496
+target_ttff_seconds,early_duration_mean,0.007131560117006307,-0.00029512408375740733
+target_ttff_seconds,early_spatial_dispersion,0.006492349132895472,-0.0030744789987802584
+target_ttff_seconds,early_scanpath_length,0.006107125222682949,0.0003300846219062875
+target_ttff_seconds,early_y_std,0.004769625052809712,-0.001773006543517111
+target_ttff_seconds,early_duration_total,0.0034340356960892633,0.00023534791916608177
+target_ttff_seconds,early_duration_std,0.002514815062284467,0.0006766193211078686

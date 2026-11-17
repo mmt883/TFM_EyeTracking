@@ -1,0 +1,219 @@
+EXPLICACION DEL SCRIPT 11
+========================
+Archivo explicado: 11_Entrada_Fijaciones_Completas.py
+
+1. ¿PARA QUE SIRVE?
+------------------
+Este script convierte los registros completos de seguimiento ocular en una
+fila de datos por participante e imagen observada. Calcula medidas temporales,
+espaciales y aproximaciones de la atencion sobre texto e imagen. Guarda esas
+medidas y, si esta activado el entrenamiento, usa AutoGluon para predecir
+algunos de esos valores en las imagenes reservadas para Test.
+
+La palabra "completa" significa que se resumen las fijaciones de toda la
+sesion frente a una imagen, no solo los primeros segundos. Por eso el modelo
+es una linea base descriptiva: no representa una prediccion hecha antes de
+terminar la observacion.
+
+2. DATOS QUE NECESITA
+--------------------
+- Data/UEyes_dataset/image_types.csv: metadatos oficiales de cada imagen.
+  De ahi se obtienen su categoria y su particion Train o Test.
+- Data/UEyes_dataset/eyetracker_logs/: archivos CSV de los registros.
+- Data/UEyes_dataset/images/: capturas usadas para aproximar regiones
+  visuales (AOI).
+
+El proyecto calcula estas rutas en Funciones_Comunes.py a partir de la
+ubicacion del propio script. Los metadatos se leen con leer_metadatos(), que
+normaliza los nombres de imagen, descarta particiones distintas de Train/Test
+y, si se solicita, filtra por categoria.
+
+Cada nombre de log debe permitir reconocer el participante, por ejemplo
+"00_kh000_fixations.csv". El script procesa los logs de todos los participantes
+reconocibles; no ofrece un filtro por usuario.
+
+3. CONFIGURACION PRINCIPAL
+--------------------------
+- CATEGORY_FILTER: None procesa todas las categorias; tambien puede ser una
+  categoria oficial como desktop, mobile, poster o web.
+- AOI_GRID_COLUMNS y AOI_GRID_ROWS: establecen una rejilla de 16 por 12
+  regiones para analizar cada captura.
+- ATTENTION_GRID_SIZE: usa una rejilla de 8 por 8 para medir distribucion y
+  cobertura espacial de las fijaciones.
+- TIME_LIMIT_SECONDS: limite de entrenamiento por cada target.
+- RUN_TRAINING: True ajusta modelos; False conserva el calculo y exportacion
+  de medidas, sin entrenar ni crear predicciones.
+
+4. COMO SE LEEN Y FILTRAN LOS LOGS
+----------------------------------
+La funcion extraer_datos_fijaciones_completas() recorre los logs en orden
+reproducible. Si no se puede leer un CSV, imprime un aviso y continua con el
+siguiente. Tambien omite logs sin MEDIA_NAME o sin una columna de tiempo
+reconocible.
+
+obtener_columna_tiempo() encuentra una columna cuyo nombre comienza por TIME,
+pero excluye TIMETICK, porque ese contador no se trata como tiempo transcurrido.
+MEDIA_NAME se convierte a una clave normalizada para encontrar la imagen en
+los metadatos. Las filas sin tiempo numerico se descartan.
+
+Si existe FPOGV, solo se consideran fijaciones con FPOGV igual a 1. Si no
+existe esa columna, se usan las filas restantes del log como fijaciones. Cada
+archivo puede contener varias imagenes: el script agrupa las filas por imagen
+y solo conserva las que aparecen en los metadatos seleccionados. Una fila de
+resultado corresponde a una combinacion participante-imagen.
+
+5. AOI: QUE SIGNIFICA Y COMO SE CALCULA
+---------------------------------------
+AOI significa "Area of Interest" o area de interes. Funciones_AOI.py divide
+cada captura en una rejilla regular (16 columnas por 12 filas) y clasifica
+cada celda usando brillo, variacion de luminancia, saturacion y bordes.
+Las clases son:
+- text_like: patron que se parece a texto por su contraste/bordes y baja
+  saturacion.
+- visual_like: patron con suficiente color o con contraste y bordes.
+- other: no cumple los criterios anteriores.
+
+Es una heuristica de pixeles: no lee palabras, no reconoce objetos y no sabe
+el significado de la interfaz. Por tanto, "text_like" y "visual_like" son
+aproximaciones, no etiquetas verificadas por OCR o por una persona. La imagen
+se analiza una vez y el resultado se guarda en una cache para reutilizarlo
+cuando varios participantes vieron la misma captura. Si falta o no se puede
+abrir una imagen, el script avisa y deja sin calcular las medidas que dependen
+de sus AOI.
+
+Las coordenadas FPOGX y FPOGY se interpretan como posiciones normalizadas
+entre 0 y 1. Se limitan a ese rango y se proyectan al ancho y alto originales
+de la captura para identificar la celda donde cae cada fijacion.
+
+6. MEDIDAS CALCULADAS EN CADA SESION
+------------------------------------
+resumir_sesion_completa() calcula lo siguiente:
+
+Medidas temporales:
+- feature_observation_duration_seconds: maximo menos minimo del tiempo TIME
+  de las filas registradas para esa imagen.
+- feature_fixation_duration_mean: promedio de FPOGD.
+- feature_fixation_duration_std: desviacion estandar de FPOGD.
+- feature_fixation_duration_total: suma de FPOGD.
+- Las duraciones invalidas, no numericas o negativas no se usan para estas
+  estadisticas. Si no hay datos suficientes, algunas medidas quedan como
+  NaN; con una sola duracion, la desviacion estandar se fija en cero.
+
+Medidas espaciales:
+- feature_fixation_count: numero de filas de fijacion seleccionadas.
+- feature_x_mean / feature_y_mean: posicion media horizontal y vertical.
+- feature_x_std / feature_y_std: dispersion de cada coordenada.
+- feature_spatial_dispersion: distancia cuadratica media de las fijaciones
+  respecto al centro medio (raiz de la media de distancias al cuadrado).
+- feature_inter_fixation_distance_mean: distancia euclidiana media entre
+  posiciones consecutivas.
+- target_scanpath_length: suma de esas distancias consecutivas. Se calcula
+  desde FPOGX/FPOGY, no sumando SACCADE_MAG.
+
+Medidas de distribucion espacial:
+- target_attention_entropy: cuenta fijaciones en una rejilla de 8 por 8.
+  Calcula la entropia de Shannon de las proporciones de celdas ocupadas y la
+  divide por log2(64), de modo que quede normalizada.
+- target_grid_coverage: numero de celdas visitadas dividido por 64.
+
+Medidas basadas en AOI:
+- target_time_on_text_seconds y target_time_on_images_seconds: sumas de FPOGD
+  de fijaciones clasificadas, respectivamente, como text_like y visual_like.
+- target_ttff_seconds: tiempo desde el inicio registrado del ensayo hasta la
+  primera fijacion que cae en una celda text_like o visual_like. No distingue
+  entre ambas clases; el nombre TTFF no debe interpretarse como una medicion
+  semantica de la primera lectura de texto.
+- target_visited_elements: numero de celdas AOI distintas visitadas.
+- target_transitions: numero de veces que cambia el ID de celda entre
+  fijaciones AOI consecutivas. Repetir una celda no cuenta como transicion.
+
+Si no hay imagen/AOI utilizable, TTFF, tiempos por clase, elementos visitados y
+transiciones no se pueden medir. Si no hay duraciones validas para ninguna
+fijacion AOI, los tiempos por clase quedan como NaN en lugar de presentarse
+como cero. Cuando no hay coordenadas validas, las medidas espaciales quedan
+como NaN.
+
+7. FEATURES Y TARGETS DEL MODELO
+--------------------------------
+FEATURE_COLUMNS enumera las columnas predictoras posibles: categoria,
+duracion observada, estadisticas de duracion y recuento de fijaciones,
+estadisticas de coordenadas, dispersion y distancia media entre fijaciones.
+
+PROXY_TARGET_COLUMNS, definido en Funciones_Modelado.py, contiene 11 targets:
+TTFF, tiempo en texto, tiempo en imagen, longitud del scanpath, numero de
+fijaciones, entropia, dispersion, cobertura de rejilla, elementos visitados,
+transiciones y duracion media de fijacion.
+
+FEATURE_COLUMNS_BY_TARGET elimina algunas variables directamente relacionadas
+con cada target para reducir la fuga de la etiqueta. Por ejemplo, al predecir
+la duracion media se quitan de las entradas las estadisticas de duracion. Esto
+no convierte la prueba en prospectiva: las demas entradas tambien se resumen
+de la sesion completa.
+
+8. PROXIES DE EXPLORACION
+-------------------------
+calcular_indicadores_proxy() transforma los 11 targets en rangos de 0 a 1.
+Los minimos y maximos de referencia se calculan con Train; los valores fuera
+del rango de Train se limitan a 0 o 1. Si el target es constante en Train,
+los valores existentes se normalizan a cero. Si falta una referencia valida,
+el resultado correspondiente no se puede calcular.
+
+Con los targets normalizados, calcula tres indicadores:
+- proxy_exploration_efficiency: 40% de (1 - TTFF), 30% de (1 - longitud del
+  scanpath) y 30% de (1 - numero de fijaciones).
+- proxy_attention_distribution: 40% de (1 - entropia), 30% de (1 - dispersion)
+  y 30% de cobertura de rejilla.
+- proxy_exploration_strategy: 40% de numero de elementos visitados, 30% de
+  (1 - transiciones) y 30% de duracion media de fijacion.
+
+Estos indicadores son composiciones heuristicas del proyecto, no medidas
+psicologicas validadas por este script. La estrategia recibe ademas una
+etiqueta: Exploracion enfocada (>= 0.75), Exploracion sistematica (>= 0.50),
+Exploracion superficial (>= 0.25), Exploracion erratica (menor de 0.25) o
+No calculable.
+
+9. ENTRENAMIENTO Y PARTICION
+----------------------------
+ejecutar() valida el limite de tiempo, carga los metadatos y obtiene la tabla
+de sesiones. La particion oficial se hereda de cada imagen: no se sortea ni se
+crea de nuevo. Funciones_Modelado.py comprueba que no haya imagenes comunes
+entre Train y Test y entrena un regresor AutoGluon independiente para cada
+target, usando unicamente las filas Train con valor valido para ese target.
+Los datos Test se reservan para la evaluacion. Tambien se comparan modelos
+AutoGluon y se intenta guardar explicaciones SHAP.
+
+La tabla de datos incluye los targets observados. Despues del entrenamiento,
+se guardan predicciones para Test y proxies tanto de los valores observados
+como de los predichos. La normalizacion de ambos usa la referencia Train,
+para que la comparacion use la misma escala.
+
+10. ARCHIVOS DE SALIDA
+----------------------
+Cada ejecucion crea una carpeta nueva en:
+Resultados/Resultados_Input_Fijaciones_Completas/
+El nombre combina fecha y hora con la categoria filtrada.
+
+Siempre que haya datos validos se guarda:
+- targets_y_proxies_input_completo.csv: una fila por participante-imagen,
+  con features, targets y proxies calculados.
+
+Si RUN_TRAINING=True se generan ademas:
+- predicciones_y_proxies_test.csv: targets reales, predicciones y proxies
+  observados/predichos para Test.
+- metricas_test.csv y comparacion_modelos.csv: resumenes de rendimiento.
+- Una carpeta por target con modelo, predicciones, metricas, leaderboard,
+  comparacion de modelos y resultados SHAP.
+
+11. COMO EJECUTARLO Y COMO LEER LOS AVISOS
+------------------------------------------
+Ejecuta el archivo con Python desde el entorno del proyecto. Antes de hacerlo,
+comprueba que existan el CSV de metadatos, los logs y las capturas, y que esten
+instaladas las dependencias usadas por el proyecto (entre ellas pandas,
+NumPy, Pillow y, para entrenar, AutoGluon y sus dependencias).
+
+Los errores de configuracion o la ausencia total de datos producen ValueError
+con un mensaje explicativo. Algunos logs o imagenes individuales que no se
+puedan leer generan un aviso y se omiten o se dejan sin medidas AOI. Un CSV
+vacio suele indicar que la categoria seleccionada, el nombre del participante,
+los nombres de imagen o las columnas del log no coinciden con los datos
+disponibles.

@@ -1,0 +1,4 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_time_on_text_seconds,early_duration_total,0.09833516967296596,0.02474333155155182
+target_time_on_text_seconds,early_y_mean,0.058363966822624194,-0.003378545165062019
+target_time_on_text_seconds,early_x_std,0.047871268749237084,-0.009246735811233498

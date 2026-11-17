@@ -1,0 +1,4 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_ttff_seconds,category,0.06494681496173142,0.009949455298483368
+target_ttff_seconds,feature_fixation_count,0.01630280032753944,-0.0096593405008316
+target_ttff_seconds,feature_inter_fixation_distance_mean,0.008713099204003814,-2.030815929174451e-05

@@ -1,0 +1,173 @@
+EXPLICACION DEL SCRIPT 12
+========================
+Archivo explicado: 12_Entrada_Ventana_Inicial.py
+
+1. ¿PARA QUE SIRVE?
+------------------
+Este script estudia si una mirada observada al principio de una sesion permite
+predecir medidas de la sesion completa. Usa como entrada las fijaciones de los
+primeros segundos y como resultado esperado (target) los valores calculados
+sobre toda la observacion.
+
+Con la configuracion actual, la ventana inicial dura 3 segundos. No se usan
+las fijaciones posteriores a esos 3 segundos como variables predictoras. Sin
+embargo, los targets se calculan con el registro completo, incluidos esos
+segundos posteriores: la pregunta es si la mirada inicial permite anticipar
+las medidas finales.
+
+2. RELACION CON LOS OTROS SCRIPTS
+---------------------------------
+El script usa Funciones_Entradas.py para obtener tanto las caracteristicas de
+la ventana inicial como las medidas de la sesion completa. Asi no importa ni
+ejecuta los scripts numerados 02 o 11. El modulo compartido conserva las
+mismas reglas de lectura, filtrado, AOI, resumen y particion que utilizan esos
+experimentos.
+
+La extraccion de ventana se llama con include_aoi_targets=False: aqui solo se
+necesitan predictores tempranos. Los targets definitivos se calculan aparte
+con el registro completo.
+
+3. CONFIGURACION
+----------------
+- CATEGORY_FILTER: None usa todas las categorias; puede limitarse a desktop,
+  mobile, poster o web.
+- Los logs de todos los participantes reconocibles se procesan; no hay filtro
+  por usuario.
+- FEATURE_CUTOFF_SECONDS: duracion de la ventana de entrada. Debe ser mayor
+  que cero; actualmente es 3.0 segundos.
+- TIME_LIMIT_SECONDS: limite para cada modelo de regresion.
+- RUN_TRAINING: True entrena y predice; False guarda unicamente el dataset.
+
+Los metadatos, logs, capturas y directorios de resultados se resuelven desde
+Funciones_Comunes.py. El destino de resultados es
+Resultados/Resultados_Input_Ventana_Inicial/.
+
+4. PREPARACION DE LA TABLA
+--------------------------
+ejecutar() hace primero dos comprobaciones: que el corte y el tiempo limite
+sean positivos y que los metadatos contengan imagenes para los filtros.
+
+Primero llama a extraer_datos_fijaciones_completas() de Funciones_Entradas.py.
+Esta funcion procesa los logs completos, conserva la particion oficial de cada
+imagen y calcula los 11 targets definidos en Funciones_Modelado.py. Si no se
+obtienen targets, la ejecucion se detiene con un error claro.
+
+Despues llama a extraer_ejemplos() del mismo modulo con el corte de 3 segundos
+y con include_aoi_targets=False. Este recorrido:
+- Reconoce el participante desde el nombre del log.
+- Lee el CSV y busca MEDIA_NAME y una columna TIME (no TIMETICK).
+- Normaliza el nombre de imagen para enlazarlo con los metadatos.
+- Si FPOGV existe, conserva filas donde FPOGV vale 1; elimina filas sin
+  tiempo numerico.
+- Ordena las fijaciones y considera temprano el tiempo menor o igual al corte
+  (<= 3 s); el tiempo estrictamente posterior (> 3 s) queda fuera de las
+  entradas.
+- Solo genera un ejemplo si hay al menos una fila temprana y una posterior.
+
+Este ultimo requisito significa que una sesion sin fijaciones despues del
+corte se excluye aunque sus primeras fijaciones pudieran resumirse. La parte
+posterior sirve aqui para confirmar que la sesion atraviesa el corte, no para
+crear las variables predictoras.
+
+5. VARIABLES DE ENTRADA
+-----------------------
+La lista EARLY_FEATURE_COLUMNS de Funciones_Entradas.py contiene las
+caracteristicas "early" y la categoria. El script 12 excluye expresamente
+category, ya que procede de los metadatos y no de las observaciones iniciales.
+Por tanto, las entradas son unicamente estas medidas de mirada:
+- early_fixation_count: numero de fijaciones de la ventana inicial.
+- early_duration_mean, early_duration_std y early_duration_total: promedio,
+  desviacion estandar y suma de FPOGD en esa ventana.
+- early_x_mean y early_y_mean: coordenada media horizontal y vertical.
+- early_x_std y early_y_std: dispersion de las dos coordenadas.
+- early_spatial_dispersion: combinacion de las desviaciones de x e y.
+- early_step_distance_mean: distancia euclidiana media entre coordenadas
+  consecutivas.
+- early_scanpath_length: suma de SACCADE_MAG disponible en la ventana
+  inicial, tal como la calcula resumir_fijaciones() en Funciones_Comunes.py.
+
+Cuando una medida no tiene datos suficientes, las funciones compartidas pueden
+devolver cero o NaN segun la definicion concreta de esa medida. Los
+identificadores image_name, participant y official_split se conservan para
+unir, dividir y auditar los datos; no se incluyen entre las variables
+predictoras.
+
+6. TARGETS: MEDIDAS DE LA SESION COMPLETA
+-----------------------------------------
+El script une las caracteristicas tempranas con las columnas
+PROXY_TARGET_COLUMNS calculadas a partir de la sesion completa por
+Funciones_Entradas.py. Incluyen:
+- target_ttff_seconds: tiempo hasta la primera fijacion sobre una AOI
+  text_like o visual_like.
+- target_time_on_text_seconds y target_time_on_images_seconds: duracion
+  acumulada sobre celdas clasificadas como texto o imagen.
+- target_scanpath_length y target_fixation_count: longitud de trayectoria y
+  numero de fijaciones.
+- target_attention_entropy, target_spatial_dispersion y target_grid_coverage:
+  distribucion y extension espacial de la mirada.
+- target_visited_elements y target_transitions: celdas AOI distintas visitadas
+  y cambios entre celdas.
+- target_fixation_duration_mean: duracion media de las fijaciones.
+
+Las AOI provienen de una clasificacion heuristica de pixeles, no de OCR ni de
+una interpretacion del contenido. Por eso los targets basados en texto e
+imagen deben entenderse como aproximaciones visuales.
+
+La union se realiza con image_name, participant y official_split y exige una
+coincidencia uno a uno. Esto evita asociar por error los datos de un usuario o
+imagen con otro. Si no hay coincidencias, el script termina con un mensaje de
+error en lugar de entrenar con una tabla vacia.
+
+7. ENTRENAMIENTO Y EVALUACION
+-----------------------------
+El dataset resultante mantiene la particion oficial Train/Test que procede de
+image_types.csv. No se crea una particion aleatoria nueva. Con RUN_TRAINING=True,
+entrenar_predecir_targets() ajusta un regresor AutoGluon por cada target:
+- Para cada objetivo usa solo los ejemplos Train cuyo target sea valido.
+- Entrena con las 11 caracteristicas tempranas definidas por el script.
+- Evalua las predicciones en las filas Test, que quedan fuera del ajuste.
+- Comprueba que existen ejemplos Train y Test y que el target no es constante
+  en Train.
+- Guarda metricas, predicciones, comparacion entre modelos y explicaciones
+  SHAP para cada target.
+
+Las metricas continuas incluyen RMSE, MAE y R2. Tambien se calculan accuracy y
+F1 ponderado transformando el target continuo en clases segun terciles
+calculados exclusivamente con Train. Si hay valores repetidos en los cortes,
+puede haber menos de tres clases.
+
+Al finalizar, agregar_proxies_observados_y_predichos() calcula los tres
+indicadores derivados (eficiencia de exploracion, distribucion de atencion y
+estrategia de exploracion) para los valores reales y los predichos. La
+normalizacion usa los minimos y maximos de los targets Train, de modo que los
+valores reales y predichos se comparen con la misma referencia.
+
+8. ARCHIVOS DE SALIDA
+---------------------
+Cada ejecucion crea una carpeta fechada dentro de
+Resultados/Resultados_Input_Ventana_Inicial/:
+- dataset_ventana_inicial_y_targets.csv: entradas de los primeros 3 segundos,
+  targets completos e identificadores de auditoria.
+- predicciones_y_proxies_test.csv: targets reales, predicciones y proxies
+  observados/predichos para los ejemplos Test.
+- metricas_test.csv y comparacion_modelos.csv: resumen de rendimiento.
+- Carpetas por target con los modelos y sus resultados detallados, incluidas
+  tablas de predicciones, metricas, leaderboard, comparacion y SHAP.
+
+Si RUN_TRAINING=False, el script se detiene despues de exportar el primer CSV;
+no crea predicciones ni metricas de modelos.
+
+9. COMO INTERPRETAR EL RESULTADO
+--------------------------------
+Un error de prediccion bajo indica que, en el conjunto Test oficial, las
+caracteristicas iniciales ayudan a aproximar el target calculado para la
+sesion completa. No demuestra causalidad ni garantiza el mismo rendimiento
+en otros participantes, categorias o conjuntos de datos. El resultado depende
+de los logs validos, el corte, las capturas usadas para las AOI y la particion
+oficial de imagenes.
+
+Si aparecen errores por ausencia de Train o Test, una categoria demasiado
+restrictiva, participantes no reconocidos, imagenes sin metadatos o sesiones
+que no cruzan el corte, revisa primero las columnas y nombres de los archivos
+fuente. El script informa de valores de configuracion invalidos y de los casos
+sin datos coincidentes.

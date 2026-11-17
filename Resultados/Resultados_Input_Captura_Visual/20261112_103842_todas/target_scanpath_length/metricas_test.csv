@@ -1,0 +1,2 @@
+﻿target,model,train_rows,test_rows,feature_count,rmse,mae,r2,accuracy,f1_weighted,classification_class_count,classification_tertile_cutoffs
+target_scanpath_length,MultiModalPredictor,18340,749,33,0.9188488107601204,0.7092401574584419,0.26871140783567216,0.5020026702269693,0.49717095883919543,3,2.44325839907|3.25708527094

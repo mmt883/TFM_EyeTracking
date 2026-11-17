@@ -1,0 +1,2 @@
+﻿target,model,train_rows,test_rows,feature_count,rmse,mae,r2,accuracy,f1_weighted,classification_class_count,classification_tertile_cutoffs
+target_spatial_dispersion,MultiModalPredictor,18340,749,33,0.06360969027388845,0.04904927657222446,0.21561484704052458,0.4272363150867824,0.4124849207947613,3,0.236167378586|0.293886250372

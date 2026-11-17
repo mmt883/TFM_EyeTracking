@@ -1,0 +1,2 @@
+﻿target,model,train_rows,test_rows,feature_count,rmse,mae,r2,accuracy,f1_weighted,classification_class_count,classification_tertile_cutoffs
+target_attention_entropy,MultiModalPredictor,18340,749,33,0.0832600554876308,0.05760936278392394,0.2595362543647416,0.5327102803738317,0.5234870363321491,3,0.500885809482|0.57190224283

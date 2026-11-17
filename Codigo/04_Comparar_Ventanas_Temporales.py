@@ -24,6 +24,11 @@ from Funciones_Comunes import (
     participante_desde_nombre_archivo,
     resumir_fijaciones,
 )
+from Funciones_Modelado import (
+    evaluar_modelos_autogluon,
+    guardar_explicacion_shap,
+    metricas_clasificacion_por_terciles,
+)
 
 RESULTS_DIR = PROJECT_DIR / "Resultados" / "Resultados_Comparacion_Temporal"
 
@@ -56,7 +61,7 @@ TARGETS_TO_COMPARE = tuple(TARGET_LABELS)
 
 
 # ==========================================
-# FASE 1: CREACION DEL CONJUNTO COMPARABLE
+# EXTRACCIÓN DE VENTANAS TEMPORALES
 # ==========================================
 def extraer_datos_comparacion(logs_dir, metadata, user_filter=None):
     """Extrae las tres ventanas manteniendo iguales los ejemplos y el target.
@@ -149,7 +154,7 @@ def extraer_datos_comparacion(logs_dir, metadata, user_filter=None):
 
 
 # ==========================================
-# FASE 2: ENTRENAMIENTO Y COMPARACION
+# AJUSTE Y EVALUACIÓN DE VENTANAS
 # ==========================================
 def comparar_ventanas(data, target, time_limit, run_dir):
     """Ajusta un predictor por ventana y compara resultados en el mismo Test."""
@@ -158,6 +163,7 @@ def comparar_ventanas(data, target, time_limit, run_dir):
 
     # Cada diccionario de esta lista se convertira en una fila de resultados.
     comparison_rows = []
+    model_comparison_rows = []
     # El target no es una caracteristica y los identificadores tampoco se
     # entregan al modelo. Solo se usa el split para separar train y test.
     columns_for_model = FEATURE_COLUMNS + [target, "official_split"]
@@ -194,6 +200,26 @@ def comparar_ventanas(data, target, time_limit, run_dir):
             train_data[FEATURE_COLUMNS + [target]],
             time_limit=time_limit,
             presets="medium_quality",
+        )
+        model_comparison = evaluar_modelos_autogluon(
+            predictor=predictor,
+            train_target=train_data[target],
+            test_features=test_data[FEATURE_COLUMNS],
+            test_target=test_data[target],
+            context={"target": target, "window_seconds": seconds},
+        )
+        model_comparison.to_csv(
+            run_dir / f"comparacion_modelos_{seconds}s.csv",
+            index=False,
+            encoding="utf-8-sig",
+        )
+        model_comparison_rows.append(model_comparison)
+        guardar_explicacion_shap(
+            predictor=predictor,
+            train_features=train_data[FEATURE_COLUMNS],
+            test_features=test_data[FEATURE_COLUMNS],
+            output_dir=run_dir / f"shap_{seconds}s",
+            context={"target": target, "window_seconds": seconds},
         )
 
         # Mantenemos tanto una referencia sencilla como las metricas del modelo.
@@ -246,6 +272,11 @@ def comparar_ventanas(data, target, time_limit, run_dir):
                 "rmse_improvement_percent": improvement,
                 "model_mae": model_mae,
                 "r2": metrics.get("r2", np.nan),
+                **metricas_clasificacion_por_terciles(
+                    train_target=train_data[target],
+                    actual_target=test_labels,
+                    predictions=predictions,
+                ),
             }
         )
 
@@ -256,14 +287,20 @@ def comparar_ventanas(data, target, time_limit, run_dir):
         index=False,
         encoding="utf-8-sig",
     )
+    pd.concat(model_comparison_rows, ignore_index=True).to_csv(
+        run_dir / "comparacion_modelos.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
     return comparison
 
 
 # ==========================================
-# FASE 3: EJECUCION
+# EJECUCIÓN DEL PIPELINE
 # ==========================================
 def ejecutar():
     """Lee metadata y logs, guarda datos y, opcionalmente, compara modelos."""
+    # FASE 1: PREPARACIÓN DE LOS DATOS
     metadata = leer_metadatos(
         path=METADATA_PATH,
         category_filter=CATEGORY_FILTER,
@@ -272,6 +309,7 @@ def ejecutar():
         raise ValueError("No hay imagenes en image_types.csv para ese filtro.")
 
     # La misma funcion y columnas de metadata se usan en Exploracion_AutoGluon.py.
+    # FASE 2: EXTRACCIÓN DE CARACTERÍSTICAS
     data = extraer_datos_comparacion(
         logs_dir=LOGS_DIR,
         metadata=metadata,
@@ -312,7 +350,9 @@ def ejecutar():
     print(f"Datos exportados en: {run_dir}")
 
     if RUN_TRAINING:
+        # FASE 3: ENTRENAMIENTO DE MODELOS
         comparisons_by_target = []
+        model_comparisons_by_target = []
         for target in TARGETS_TO_COMPARE:
             print(f"Target comun: {TARGET_LABELS[target]}")
             target_dir = run_dir / target
@@ -324,9 +364,13 @@ def ejecutar():
                 run_dir=target_dir,
             )
             comparisons_by_target.append(comparison)
+            model_comparisons_by_target.append(
+                pd.read_csv(target_dir / "comparacion_modelos.csv")
+            )
             print("Comparacion de ventanas (menor RMSE es mejor):")
             print(comparison.to_string(index=False))
 
+        # FASE 4: EVALUACIÓN DE LOS RESULTADOS OBTENIDOS
         summary_path = run_dir / "resumen_comparacion_ventanas.csv"
         pd.concat(comparisons_by_target, ignore_index=True).to_csv(
             summary_path,
@@ -334,6 +378,11 @@ def ejecutar():
             encoding="utf-8-sig",
         )
         print(f"Resumen por target: {summary_path}")
+        pd.concat(model_comparisons_by_target, ignore_index=True).to_csv(
+            run_dir / "comparacion_modelos.csv",
+            index=False,
+            encoding="utf-8-sig",
+        )
 
 
 # Importar este modulo define funciones; ejecutarlo inicia el pipeline.

@@ -23,6 +23,11 @@ from Funciones_Comunes import (
     leer_metadatos,
     resumir_fijaciones,
 )
+from Funciones_Modelado import (
+    evaluar_modelos_autogluon,
+    guardar_explicacion_shap,
+    metricas_clasificacion_por_terciles,
+)
 
 RESULTS_DIR = PROJECT_DIR / "Resultados" / "Resultados_Proxies_Visuales"
 FEATURE_COLUMNS = import_module("02_Exploracion_AutoGluon").FEATURE_COLUMNS
@@ -52,7 +57,7 @@ TARGETS_TO_PREDICT = tuple(TARGET_COLUMNS)
 
 
 # ==========================================
-# FASE 1: PROXIES DE ATENCION ESPACIAL
+# EXTRACCIÓN DE PROXIES ESPACIALES
 # ==========================================
 def calcular_proxies_espaciales(fixations, grid_size):
     """Calcula dispersion, entropia y cobertura sobre coordenadas normalizadas.
@@ -108,7 +113,7 @@ def calcular_proxies_espaciales(fixations, grid_size):
 
 
 # ==========================================
-# FASE 2: CONSTRUCCION DE TABLA
+# PREPARACIÓN DE LA TABLA DE DATOS
 # ==========================================
 def extraer_datos_proxies(logs_dir, metadata, cutoff_seconds, end_seconds, user_filter=None):
     """Crea una fila por participante-interfaz con entradas y proxies futuros."""
@@ -190,7 +195,7 @@ def extraer_datos_proxies(logs_dir, metadata, cutoff_seconds, end_seconds, user_
 
 
 # ==========================================
-# FASE 3: ENTRENAMIENTO Y EVALUACION
+# ENTRENAMIENTO Y EVALUACIÓN
 # ==========================================
 def entrenar_y_evaluar(data, target, time_limit, run_dir):
     """Entrena un proxy con Train oficial y calcula metricas en Test oficial."""
@@ -237,6 +242,32 @@ def entrenar_y_evaluar(data, target, time_limit, run_dir):
         display=False,
     )
     predictions = predictor.predict(test_features)
+    metrics.update(
+        metricas_clasificacion_por_terciles(
+            train_target=train_data[target],
+            actual_target=test_data[target],
+            predictions=predictions,
+        )
+    )
+    comparison = evaluar_modelos_autogluon(
+        predictor=predictor,
+        train_target=train_data[target],
+        test_features=test_features,
+        test_target=test_data[target],
+        context={"target": target},
+    )
+    comparison.to_csv(
+        run_dir / "comparacion_modelos.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
+    guardar_explicacion_shap(
+        predictor=predictor,
+        train_features=train_data[FEATURE_COLUMNS],
+        test_features=test_features,
+        output_dir=run_dir / "shap",
+        context={"target": target},
+    )
     prediction_table = data.loc[test_data.index, ["image_name", "participant", target]].copy()
     prediction_table["prediction"] = predictions.to_numpy()
     prediction_table.to_csv(
@@ -254,7 +285,7 @@ def entrenar_y_evaluar(data, target, time_limit, run_dir):
 
 
 # ==========================================
-# FASE 4: EJECUCION
+# EJECUCIÓN DEL PIPELINE
 # ==========================================
 def ejecutar():
     """Aplica los filtros configurados, exporta la tabla y entrena el modelo."""
@@ -262,6 +293,7 @@ def ejecutar():
         raise ValueError("Revisa FEATURE_CUTOFF_SECONDS y TARGET_END_SECONDS.")
     if ENTROPY_GRID_SIZE < 2:
         raise ValueError("ENTROPY_GRID_SIZE debe ser al menos 2.")
+    # FASE 1: PREPARACIÓN DE LOS DATOS
     # image_types.csv conserva el mismo separador, columnas y filtro por categoria.
     metadata = leer_metadatos(
         path=METADATA_PATH,
@@ -270,6 +302,7 @@ def ejecutar():
     if metadata.empty:
         raise ValueError("No hay imagenes en image_types.csv para CATEGORY_FILTER.")
 
+    # FASE 2: EXTRACCIÓN DE CARACTERÍSTICAS
     data = extraer_datos_proxies(
         logs_dir=LOGS_DIR,
         metadata=metadata,
@@ -296,7 +329,9 @@ def ejecutar():
     print(f"Resultados: {run_dir}")
 
     if RUN_TRAINING:
+        # FASE 3: ENTRENAMIENTO DE MODELOS
         results_by_target = []
+        model_comparisons = []
         for target in TARGETS_TO_PREDICT:
             print(f"Proxy: {TARGET_COLUMNS[target]}")
             target_dir = run_dir / target
@@ -308,7 +343,11 @@ def ejecutar():
                 run_dir=target_dir,
             )
             results_by_target.append({"target": target, **metrics})
+            model_comparisons.append(
+                pd.read_csv(target_dir / "comparacion_modelos.csv")
+            )
 
+        # FASE 4: EVALUACIÓN DE LOS RESULTADOS OBTENIDOS
         summary_path = run_dir / "resumen_metricas_test.csv"
         pd.DataFrame(results_by_target).to_csv(
             summary_path,
@@ -316,6 +355,11 @@ def ejecutar():
             encoding="utf-8-sig",
         )
         print(f"Resumen por target: {summary_path}")
+        pd.concat(model_comparisons, ignore_index=True).to_csv(
+            run_dir / "comparacion_modelos.csv",
+            index=False,
+            encoding="utf-8-sig",
+        )
 
 
 # Al importar este modulo solo se definen funciones; la ejecucion comienza aqui.

@@ -1,0 +1,4 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_scanpath_length,feature_fixation_duration_mean,0.4883950591236353,0.10874175496399408
+target_scanpath_length,category,0.21321388950943937,-0.08301162990927688
+target_scanpath_length,feature_fixation_duration_total,0.17060933075845242,0.08169317592680456
