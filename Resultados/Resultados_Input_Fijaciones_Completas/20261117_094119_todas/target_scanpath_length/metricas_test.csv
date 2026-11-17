@@ -1,0 +1,2 @@
+﻿target,train_rows,test_rows,feature_count,rmse,mae,r2,root_mean_squared_error,mean_squared_error,mean_absolute_error,pearsonr,median_absolute_error,accuracy,f1_weighted,classification_class_count,classification_tertile_cutoffs
+target_scanpath_length,18340,749,5,0.7304394194401088,0.5690484023954746,0.5378647579327267,-0.7304394194401088,-0.5335417454720033,-0.5690484023954746,0.7341318602710133,-0.4685966119525775,0.5941255006675568,0.6022370617836599,3,2.44325839907|3.25708527094

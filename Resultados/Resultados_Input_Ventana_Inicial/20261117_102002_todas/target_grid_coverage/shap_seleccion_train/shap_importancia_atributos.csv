@@ -1,0 +1,12 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_grid_coverage,early_x_std,0.007645074330270289,-0.0011719352528452894
+target_grid_coverage,early_fixation_count,0.006677659258246422,0.005477575331926348
+target_grid_coverage,early_scanpath_length,0.005670333281159398,0.0023008274286985403
+target_grid_coverage,early_x_mean,0.005342743575572966,0.0005085554569959668
+target_grid_coverage,early_y_mean,0.005193891055881977,-0.0010517610237002401
+target_grid_coverage,early_duration_total,0.002536958485841749,0.0004496731460094425
+target_grid_coverage,early_y_std,0.0019492502436041822,-7.897929102182317e-05
+target_grid_coverage,early_duration_mean,0.0016986363455653171,0.0014912448599934554
+target_grid_coverage,early_step_distance_mean,0.0016828916594386137,0.001025242410600187
+target_grid_coverage,early_spatial_dispersion,0.001463186874985692,0.0005488759428262685
+target_grid_coverage,early_duration_std,0.0010232617184519747,-1.8863163888456492e-05
