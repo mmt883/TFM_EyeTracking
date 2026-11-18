@@ -1,0 +1,4 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_time_on_images_seconds,category,0.3995097634792328,0.04647779846191401
+target_time_on_images_seconds,feature_observation_duration_seconds,0.04125299024581911,-0.001391789674758892
+target_time_on_images_seconds,feature_fixation_duration_std,0.01937140548229215,-0.01468928754329677

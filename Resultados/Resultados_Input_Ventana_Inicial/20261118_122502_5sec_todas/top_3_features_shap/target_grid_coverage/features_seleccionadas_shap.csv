@@ -1,0 +1,4 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_grid_coverage,early_x_std,0.013836032673716542,0.0023053049296140695
+target_grid_coverage,early_fixation_count,0.010171013139188289,-0.0003096580132842107
+target_grid_coverage,early_scanpath_length,0.0062707092612981855,0.0015808197259902985

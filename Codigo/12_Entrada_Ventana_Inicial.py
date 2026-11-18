@@ -16,6 +16,8 @@ del extractor completo y los mantiene separados de las features de entrada.
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, accuracy_score
 
 from datetime import datetime
+import pandas as pd
+import numpy as np
 
 from Funciones_Comunes import (
     LOGS_DIR,
@@ -36,7 +38,13 @@ from Funciones_Modelado import (
 
 #Omite los warnings de fastai que no afectan a la ejecucion y ensucian la salida.
 import warnings
-warnings.filterwarnings("ignore", category=UserWarning, module="fastai.*")
+import os
+
+# 1. Propaga el silencio a todos los subprocesos hijos (Ray / multiprocessing en Windows)
+os.environ["PYTHONWARNINGS"] = "ignore::UserWarning:fastai.learner"
+
+# 2. Silencia la advertencia en el proceso principal filtrando por el texto exacto
+warnings.filterwarnings("ignore", message=".*load_learner.*", category=UserWarning)
 
 
 RESULTS_DIR = PROJECT_DIR / "Resultados" / "Resultados_Input_Ventana_Inicial"
@@ -48,7 +56,7 @@ RESULTS_DIR = PROJECT_DIR / "Resultados" / "Resultados_Input_Ventana_Inicial"
 CATEGORY_FILTER = None  # None o categoria oficial: desktop, mobile, poster, web.
 # Solo las fijaciones hasta este segundo generan las entradas del modelo. El
 # extractor compartido divide la sesion usando este limite temporal.
-FEATURE_CUTOFF_SECONDS = 3.0  # Mirada inicial utilizada como input.
+FEATURE_CUTOFF_SECONDS = 5.0  # Mirada inicial utilizada como input.
 # El limite se aplica a cada target en AutoGluon, no a toda la ejecucion.
 # RUN_TRAINING=False permite verificar el dataset antes de iniciar los modelos.
 TIME_LIMIT_SECONDS = 900  # Limite por target de regresion AutoGluon.
@@ -132,7 +140,7 @@ def ejecutar():
     # Cada ejecucion tiene su carpeta para no sobrescribir resultados previos.
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     category_name = (CATEGORY_FILTER or "todas").casefold()
-    run_dir = RESULTS_DIR / f"{timestamp}_{category_name}"
+    run_dir = RESULTS_DIR / f"{timestamp}_{FEATURE_CUTOFF_SECONDS}sec_{category_name}"
     run_dir.mkdir(parents=True, exist_ok=True)
     model_data.to_csv(
         run_dir / "dataset_ventana_inicial_y_targets.csv",

@@ -1,0 +1,4 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_fixation_duration_mean,feature_fixation_count,0.032739684432744984,-0.023582316577434544
+target_fixation_duration_mean,feature_observation_duration_seconds,0.015034458681941027,0.01163419775664806
+target_fixation_duration_mean,feature_inter_fixation_distance_mean,0.010128885164856915,-0.001597547188401227

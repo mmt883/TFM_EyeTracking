@@ -1,0 +1,4 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_scanpath_length,early_step_distance_mean,0.2935602833032608,0.09139915239810939
+target_scanpath_length,early_fixation_count,0.23574988234043123,-0.021528892159461955
+target_scanpath_length,early_scanpath_length,0.16118488216400156,0.019622367858886734

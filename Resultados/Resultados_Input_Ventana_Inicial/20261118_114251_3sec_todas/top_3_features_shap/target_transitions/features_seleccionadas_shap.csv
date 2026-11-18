@@ -1,0 +1,4 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_transitions,early_fixation_count,0.7150238194465637,0.5733392758369444
+target_transitions,early_scanpath_length,0.2476696147918699,0.12804459381103497
+target_transitions,early_x_mean,0.15563246250152618,-0.023742120742797735

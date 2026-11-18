@@ -1,0 +1,4 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_ttff_seconds,early_fixation_count,0.03018242782354355,-0.01644174733757973
+target_ttff_seconds,early_x_mean,0.02123806373775005,-0.007724420204758645
+target_ttff_seconds,early_duration_total,0.013892141416668885,-0.002476833596825595

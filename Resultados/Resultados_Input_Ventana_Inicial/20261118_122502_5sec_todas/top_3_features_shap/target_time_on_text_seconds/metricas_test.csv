@@ -1,0 +1,2 @@
+﻿target,train_rows,test_rows,feature_count,rmse,mae,r2,root_mean_squared_error,mean_squared_error,mean_absolute_error,pearsonr,median_absolute_error,accuracy,f1_weighted,classification_class_count,classification_tertile_cutoffs
+target_time_on_text_seconds,18140,734,3,1.5183426443482484,1.2656236773502858,0.052487551245682273,-1.5183426443482484,-2.3053643856464316,-1.2656236773502858,0.2319146340837528,-1.1623907809829714,0.3419618528610354,0.19552029299268278,3,2.13379|3.73083

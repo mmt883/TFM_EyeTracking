@@ -1,0 +1,6 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_transitions,feature_fixation_duration_mean,1.4564187517166138,0.16837618561089024
+target_transitions,category,1.0955603071264925,-0.552405945312232
+target_transitions,feature_fixation_duration_total,1.0826834068521858,-0.016316847085952622
+target_transitions,feature_fixation_duration_std,0.27311739585921135,0.009395646970718773
+target_transitions,feature_observation_duration_seconds,0.13759786220639944,0.04597829052805893

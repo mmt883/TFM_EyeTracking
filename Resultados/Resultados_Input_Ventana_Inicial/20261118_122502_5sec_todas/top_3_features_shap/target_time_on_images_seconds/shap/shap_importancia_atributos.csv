@@ -1,0 +1,4 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_time_on_images_seconds,early_x_mean,0.18470986586809157,0.053159112513065335
+target_time_on_images_seconds,early_duration_total,0.09779556816816326,0.04838415950536725
+target_time_on_images_seconds,early_fixation_count,0.015499494671821611,-0.0045185174942016905

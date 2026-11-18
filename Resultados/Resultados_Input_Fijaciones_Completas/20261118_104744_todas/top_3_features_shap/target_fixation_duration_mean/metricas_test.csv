@@ -1,0 +1,2 @@
+﻿target,train_rows,test_rows,feature_count,rmse,mae,r2,root_mean_squared_error,mean_squared_error,mean_absolute_error,pearsonr,median_absolute_error,accuracy,f1_weighted,classification_class_count,classification_tertile_cutoffs
+target_fixation_duration_mean,18340,749,3,0.032387320759118356,0.019882610022128797,0.58617637304901,-0.032387320759118356,-0.0010489385459540189,-0.019882610022128797,0.7664927466971807,-0.01431362743759157,0.7089452603471295,0.7122026617473562,3,0.294433125|0.331158421053

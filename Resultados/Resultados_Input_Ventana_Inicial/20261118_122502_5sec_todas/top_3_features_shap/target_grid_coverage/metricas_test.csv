@@ -1,0 +1,2 @@
+﻿target,train_rows,test_rows,feature_count,rmse,mae,r2,root_mean_squared_error,mean_squared_error,mean_absolute_error,pearsonr,median_absolute_error,accuracy,f1_weighted,classification_class_count,classification_tertile_cutoffs
+target_grid_coverage,18193,735,3,0.0336572528391267,0.02682568561665866,0.49081363545498957,-0.0336572528391267,-0.0011328106686769022,-0.02682568561665866,0.7091789122244156,-0.02250685542821884,0.6040816326530613,0.6054791441631037,3,0.140625|0.1875

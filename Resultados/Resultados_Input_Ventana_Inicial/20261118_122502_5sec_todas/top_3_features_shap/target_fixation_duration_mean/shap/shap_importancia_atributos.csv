@@ -1,0 +1,4 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_fixation_duration_mean,early_fixation_count,0.01866714887320996,-0.0030810091942548743
+target_fixation_duration_mean,early_duration_mean,0.01275612664222718,-0.0030267856121063337
+target_fixation_duration_mean,early_duration_total,0.00905177237093448,0.0015554579943418522

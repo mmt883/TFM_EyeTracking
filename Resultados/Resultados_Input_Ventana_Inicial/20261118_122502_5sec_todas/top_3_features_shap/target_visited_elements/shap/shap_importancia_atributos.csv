@@ -1,0 +1,4 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_visited_elements,early_fixation_count,1.0553710618019108,0.18782580423355116
+target_visited_elements,early_x_std,0.7608800721168518,-0.12163803434371952
+target_visited_elements,early_step_distance_mean,0.11706403446197529,-0.009232308387756039

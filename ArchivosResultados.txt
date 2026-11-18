@@ -1,0 +1,41 @@
+Cada ejecucion genera una carpeta identificada con la fecha, hora y filtro de categoria (por ejemplo: Resultados_Input_.../20261118_113000_todas/). Su contenido se organiza en tres niveles: archivos globales consolidados en la raiz, subcarpetas individuales por cada target y una subcarpeta opcional de seleccion de variables.
+
+ARCHIVOS GLOBALES (EN LA CARPETA RAIZ DE LA EJECUCION)
+
+Reunen y consolidan los resultados de toda la ejecucion en tablas unificadas para facilitar el analisis global:
+
+Dataset de entrada extraido (targets_y_proxies_input_completo.csv o dataset_captura_visual_y_targets.csv): Contiene todas las sesiones (Train y Test) antes del modelado, con las variables de entrada (mirada o descriptores visuales) y los 11 targets reales medidos.
+
+metricas_test.csv: Tabla resumen principal. Contiene una fila por cada uno de los 11 targets con sus metricas de error y acierto en Test (RMSE, MAE, R2, Accuracy y F1 ponderado por terciles), ademas del numero de filas y variables utilizadas.
+
+metricas_proxies_test.csv: Tabla resumen con las metricas de error en Test (RMSE, MAE y R2) para los 3 indicadores proxy continuos (eficiencia exploratoria, distribucion de atencion y estrategia exploratoria).
+
+predicciones_test.csv: Contiene exclusivamente las filas del conjunto Test con los identificadores (image_name, participant, official_split), los 11 targets observados reales y las 11 columnas de prediccion (prediction_).
+
+predicciones_y_proxies_test.csv: Es la tabla maestra final de microdatos en Test. Amplia predicciones_test.csv anadiendo los 3 indicadores proxy y la etiqueta categorica de estrategia tanto para los valores reales (actual_proxy_) como para los calculados a partir de las predicciones del modelo (predicted_proxy_), normalizados usando solo los rangos de Train.
+
+comparacion_modelos.csv: Consolida la comparativa de rendimiento en Test de los algoritmos entrenados por AutoGluon para cada uno de los 11 targets.
+
+resumen_metricas_test_top_3_shap.csv y targets_omitidos_top_3_shap.csv (solo en modelos tabulares si RUN_SHAP_TOP3 esta activo): Resumen el rendimiento en Test al reentrenar cada target usando unicamente sus 3 variables mas importantes segun SHAP, e indican si algun target se omitio por tener menos de 3 variables disponibles.
+
+SUBDIVISION POR TARGETS INDIVIDUALES (<nombre_del_target>/)
+
+En lugar de entrenar un unico modelo monolitico que prediga todo a la vez, el pipeline entrena un modelo especialista independiente para cada uno de los 11 targets (target_ttff_seconds, target_time_on_text_seconds, target_time_on_images_seconds, target_scanpath_length, target_fixation_count, target_attention_entropy, target_spatial_dispersion, target_grid_coverage, target_visited_elements, target_transitions y target_fixation_duration_mean).
+
+Esta subdivision permite que AutoGluon optimice cada metrica en su propia escala matematica y aplique exclusiones especificas de variables por target para evitar filtracion de datos (data leakage). Posteriormente, los resultados de estas 11 carpetas se unifican automaticamente en los CSV globales de la carpeta raiz.
+
+Dentro de la carpeta de cada target se guardan sus artefactos especificos:
+
+predicciones_test.csv: Valores reales y predichos en Test unicamente para ese target.
+
+metricas_test.csv: Fila con las metricas de evaluacion en Test de ese target concreto.
+
+leaderboard_test.csv y comparacion_modelos.csv (en modelos tabulares): Ranking interno de AutoGluon y metricas individuales de cada algoritmo evaluado sobre Test (LightGBM, CatBoost, Random Forest, redes neuronales, etc.).
+
+shap/ y shap_seleccion_train/ (en modelos tabulares): Contienen el calculo de importancia de variables (shap_importancia_atributos.csv) y los graficos explicativos (shap_importancia_global.png y shap_resumen.png).
+
+modelo_multimodal/ (en el enfoque multimodal de captura visual): Guarda los pesos y archivos internos de la red neuronal multimodal entrenada para ese target.
+
+SUBCARPETA DE SELECCION DE VARIABLES (top_3_features_shap/)
+
+Se genera unicamente en los pipelines tabulares cuando RUN_SHAP_TOP3 es True. Replica exactamente la misma estructura de subcarpetas por target individual descrita en el punto 2, pero entrenando los modelos exclusivamente con las 3 variables mas influyentes seleccionadas sobre Train (listadas en el archivo features_seleccionadas_shap.csv dentro de cada target).

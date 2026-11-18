@@ -1,0 +1,4 @@
+﻿target,feature,mean_absolute_shap,mean_shap
+target_attention_entropy,early_scanpath_length,0.02122177186608315,-0.000685308247804639
+target_attention_entropy,early_x_std,0.019564159095287317,-0.0012617549896240226
+target_attention_entropy,early_y_mean,0.011162092119455338,0.006654197722673419
